@@ -13,9 +13,9 @@
 
 
 
-**Docker三板斧：**Build、Ship(发送) and Run
+**Docker三板斧：** Build、Ship(发送) and Run
 
-**Docker三大核心：**镜像(Image)、容器(Container)、仓库(Repository)
+**Docker三大核心：** 镜像(Image)、容器(Container)、仓库(Repository)
 
 **Docker Registry**服务，是对Docker镜像进行管理的。官方（Docker Hub)
 
