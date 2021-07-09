@@ -1,4 +1,4 @@
-# Django
+# 			Django
 
 Web应用：在浏览器中可以直接使用的应用程序
 
@@ -34,7 +34,17 @@ Controller - 控制器 （连接数据和视图的桥梁） 业务逻辑处理 V
 
 ## django安装配置
 
+创建依赖清单
 
+```shell
+pip freeze  >  requirements.txt 
+```
+
+如果有了清单文件，可以根据清单安装依赖项
+
+```shell
+pip install -r requirements.txt
+```
 
 ### 安装django-admin工具
 
@@ -359,6 +369,8 @@ STATIC_URL = '/templates/'
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'templates')]
 ```
 
+
+
 ### 返回Json类型数据
 
 ~~~python
@@ -375,9 +387,87 @@ JsonResponse(data)
 
 
 
+## Django-jet
+
+[jet文档](https://jet.readthedocs.io/en/latest/install.html)
+
+[jet中文文档](https://www.cnblogs.com/luofeel/p/8670030.html)
 
 
-## Django缓存获取
+
+### 安装错误
+
+**python manage.py migrate jet** 是报错：
+
+* <font color="red">ImportError: cannot import name ‘python_2_unicode_compatible‘ from ‘django.utils.encoding</font>
+
+修改jet/modles.py下的
+
+安装仪表盘的时候也需要更加，dashboard/modles.py
+
+~~~python
+# 将
+from django.utils.encoding import python_2_unicode_compatible
+# 替换成
+from six import python_2_unicode_compatible
+~~~
+
+
+
+添加STATIC_ROOT，不然会在`python manage.py collectstatic`（收集静态资源）时报错：
+
+* <font color="red">django.core.exceptions.ImproperlyConfigured: You're using the staticfiles app without having set the STATIC_ROOT setting to a filesystem path.</font>
+
+```python
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+```
+
+
+
+
+
+###  配置主题
+
+```python
+JET_THEMES = [
+    {
+        'theme': 'default',  # theme folder name
+        'color': '#47bac1',  # color of the theme's button in user menu
+        'title': 'Default'  # theme title
+    },
+    {
+        'theme': 'green',
+        'color': '#44b78b',
+        'title': 'Green'
+    },
+    {
+        'theme': 'light-green',
+        'color': '#2faa60',
+        'title': 'Light Green'
+    },
+    {
+        'theme': 'light-violet',
+        'color': '#a464c4',
+        'title': 'Light Violet'
+    },
+    {
+        'theme': 'light-blue',
+        'color': '#5EADDE',
+        'title': 'Light Blue'
+    },
+    {
+        'theme': 'light-gray',
+        'color': '#222',
+        'title': 'Light Gray'
+    }
+]
+
+JET_DEFAULT_THEME = 'light-gray'
+```
+
+
+
+## Redis缓存服务
 
 **cache**默认缓存
 
@@ -389,13 +479,132 @@ JsonResponse(data)
 from django.core.cache import cache, caches
 ```
 
+配置默认缓存
 
+```python
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': [
+            f"redis://ip:端口/数据库",
+        ],
+
+        # 缓存中键的前缀：解决命名冲突
+        'KEY_PREFIX': 'ncc',
+        # 缓存服务的配置参数
+        'OPTIONS': {
+            # 配置连接池（减少频繁的创建和释放Redis连接造成的网络开销
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 512,
+            },
+
+            # 'PASSWORD': 'xxxxxx',
+        }
+    },
+}
+```
+
+
+
+将session放在缓存中，不放在数据库中
+
+~~~python
+# 使用缓存保存用户跟踪的session对象
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache' 
+# 使用的那组存储
+SESSION_CACHE_ALIAS = 'default'
+# 缓存存活时间
+SESSION_COOKIE_AGE = 1209600 
+# 如果设置为True，Cookie就是基于浏览器窗口的Cookie，不会持久化。浏览器窗口一关bi，session自动过期（cookie消除）
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+~~~
+
+
+
+### 数据接口缓存
+
+#### 声明式缓存
+
+FBV 在视图函数打上@cache_page()装饰器即可，指定超时时间和数据
+
+```python
+from django.views.decorators.cache import cache_page 
+
+@cache_page(timeout=60 * 3, cache='default')
+```
+
+CBV - name指定加到该类的指定方法上（list方法上）
+
+```python
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page 
+
+@method_decorator(decorator=cache_page(timeout=3600, cache='api'), name='list')
+class UserViewSet(ModelViewSet):
+    # 如何获取数据
+    queryset = User.objects.all()
+    # 如何序列化数据
+    serializer_class = UserModelSerializer
+
+```
+
+#### 编程式缓存
+
+原生redis超时时间参数为：ex，django-redis超时时间参数为：timeout
+
+**django-redis**
+
+使用django-redis的缓存，只能操作字符串
+
+```python
+from django.core.cache import caches cache
+# 默认缓存 cache
+# 指定缓存 caches['api']
+```
+
+**原生redis**
+
+可以向拿到reids连接对象，可以使用**所有redis方法**（不安全，对redis进行二次封装）。
+
+```python
+from django_redis import get_redis_connection
+redis_cli = get_redis_connection('api')
+redis_cli.set('ncc:api:users',ujson.dumps(data),ex=3600)
+```
 
 
 
 
 
 ## 文件上传
+
+文件上最好的选择是多线程，而不是异步化，异步化会将文件先放到消息队列，再上传到服务器。
+
+多线程不能裸奔线程，线程的创建和销毁的本身的开销大，频繁的创建和销毁线程会给服务器带来很大的负担。
+
+配置线程池，提前一定的线程。
+
+池化技术（线程池，连接池），借还线程，使用的过程中决不创建和销毁线程。
+
+```python
+from concurrent.futures.thread import ThreadPoolExecutor
+
+
+def foo(arg1, arg2):
+    pass
+
+
+
+# 创建线程池
+POOL = ThreadPoolExecutor(max_workers=32)
+# submit，返回future对象，可在将来的某时过去线程的执行结果
+future = POOL.submit(foo)
+
+# 事件回调，钩子函数。add_done_callback()方法可以绑定线程执行完成后要执行的回调函数
+# 在线程执行结束时，可以执行需要自动执行的代码
+future.add_done_callback()
+```
 
 
 
@@ -498,6 +707,16 @@ js处理成百分号编码，**encodeURIcomponent()**
 encodeURIcomponent(backurl)
 ~~~
 
+python处理成百分号编码
+
+urllib.parse模块的quote函数
+
+~~~python
+from urllib.parse import quote
+
+quote()
+~~~
+
 
 
 
@@ -568,3 +787,651 @@ if settings.DEBUG:
     import debug_toolbar
     urlpatterns.insert(0, path('__debug__/', include(debug_toolbar.urls)))
 ```
+
+
+
+## 1+N 查询（关联查询）
+
+解决1+N查询
+
+* 一对一或者多对一：select_related()
+* 多对多：预加载抓取关联对象perfetch_related()
+
+
+
+## Django分页器
+
+Paginator() - 分页器对象
+
+
+
+
+
+## 中间件
+
+拦截过滤器
+
+
+
+## 数据报表
+
+### excel
+
+Excel2003   xlrd/xlwt
+
+Excel2007+  openpyxl
+
+
+
+Excel文件 ---> 工作簿（Workbook） --> 工作表（Sheet）--> 表格(Cell)
+
+
+
+
+
+###  字符串和字节串
+
+str（不变字符串）
+
+bytes（不变 字节串）
+
+如果频繁的修改字符串或字节串，str和bytes的效率十分低下（需要创建新对象以及垃圾回收旧对象）。
+
+需要对字符串或字节串进行频繁的写操作，那么应该使用它们对应的可变类型。
+
+str - io.StringIO  write() --> getvalue() --> str
+
+bytes - io.BytesIO write() --> getvalue() --> bytes
+
+
+
+
+
+## 前后端分离开发
+
+前后端分离
+
+settings.py下的template路径列表，改为空
+
+将返回render函数的更改，为JsonResponse()
+
+
+
+### 前端渲染
+
+后端（django模板渲染）
+
+模板引擎：AngularJS / Vue.js / Avalon
+
+
+
+
+
+## axois联网取数据
+
+
+
+
+
+## RESTful架构
+
+### 返回JSON格式数据接口
+
+1. 提供数据接口是一种非常好的封装的方式
+2. 调用数据接口时不区分操作系统和编程语言（跨平台语言）
+3. 将来的大多数产品都倾向于将软件做成可调用的服务（软件服务化）
+4. 每个自治化的团队负责一个服务数据接口的开发
+5. 每个接口只提供相对单一的功能，但是可以将多个接口组织起来构成复杂的系统（微服务架构）
+
+
+
+### Django REST Framwork
+
+帮助写出REST风格的数据接口
+
+~~~shell
+pip install djangorestdjangowork
+~~~
+
+
+
+REST风格（架构）开发互联网应用，那么这种应用将具有很好的水平的扩展性。
+
+表述性状态转移
+
+对服务器扩容两种方式：
+
+垂直扩张：增加单服务器（cpu和内存），越到后期投入产出比越低。
+
+水平扩展：增加更多的服务器节点，如果做服务器之间的数据资源的同步将变得困难。
+
+
+
+RESTful架构强调了两点：
+
+* 无状态（服务器其不保留任何状态信息）
+* 幂等性
+
+做到这两点才能比较容易的实现水平扩张。
+
+RESTful风格数据接口，这样主要的好处就是可以跨语言跨平台使用。
+
+
+
+## DRF模型序列化
+
+自定义序列化 - ModelSerializer
+
+在应用下创建一个serializers.py，自定义类继承ModelSerializer类
+
+```python
+"""
+@Time ： 2021/6/13 13:46
+@Auth ： Melon
+@File ：serializers.py
+@Description : 自定义序列化器
+"""
+from rest_framework.serializers import ModelSerializer
+
+from common.models import User, Category, Article
+
+
+class UserModelSerializer(ModelSerializer):
+    class Meta:
+        model = User
+        # 序列化所有字段
+        fields = '__all__'
+
+
+class CategorySimpleModelSerializer(ModelSerializer):
+    class Meta:
+        model = Category
+        # 序列化指定字段
+        fields = ('category_id', 'user_id', 'icon')
+
+
+class CategoryModelSerializer(ModelSerializer):
+    class Meta:
+        model = Category
+        # 不序列化的字段
+        exclude = ('is_delete', 'update_time', 'create_time')
+
+
+class ArticleModelSerializer(ModelSerializer):
+    class Meta:
+        model = Article
+        exclude = ('is_delete', 'is_visible')
+```
+
+
+
+## FBV & CBV
+
+* FBV，基于函数的视图，灵活
+* CBV，基于类的视图，继承ModelViewSet。代码量少，开发效率高，不够灵活。
+
+
+
+## JWT
+
+JWT（JSON WEB TOKEN）目前最流行的跨越请求认证解决方案。
+
+* Header（头部）：JWT元数据，alg算法hs256，typ类型jwt；
+* Payload（负载）：保存浏览器的用户数据（JSON对象），字段（签发人、过期时间等）；
+* Signature（签名）： 防伪造和篡改；
+
+对头部和载荷部分进行签名计算，计算出来的签名和令牌完全一致，则是有效的令牌。
+
+* 缺点：
+  1. 最大的缺点，服务器不保存session状态，因此无法在使用过程中废止token。
+
+
+
+* 优点：
+  1. 防伪造、防篡改。
+
+
+
+安装三方库
+
+~~~shell
+pip install pyjwt
+~~~
+
+
+
+后端：请求头中带上token，服务器通过token确认用户身份
+
+@api_view(('POST'))已经免除令牌
+
+```python
+# 用户登录成功，向用户签发令牌
+payload = {
+    'user_id': user.user_id,
+    'nickname': user.nickname,
+    # 时间可以相减，在现在的时间加上一天
+    'exp': timezone.now() + timedelta(days=1),
+}
+token = jwt.encode(payload, SECRET_KEY)
+
+
+content = {'token': token,
+           'resp': {'code': 1010, 'type': 'succeed', 'message': '登录成功！'}}
+```
+
+
+
+前端代码
+
+```js
+<script src="https://cdn.bootcdn.net/ajax/libs/vue/2.6.13/vue.min.js"></script>
+<script>
+    let app = new Vue({
+        el: '#header',
+        data: {
+            nickname: '',
+
+        },
+        // 钩子函数，vue对象创建时执行的代码
+        created() {
+            if (localStorage.nickname) {
+                this.nickname = localStorage.nickname
+            }
+        },
+        methods: {
+            logout() {
+                delete localStorage.nickname
+                delete localStorage.token
+                this.nickname = ''
+            },
+            account() {
+                alert(localStorage.token)
+                fetch('/api/user/users', {
+                    headers: {
+                        'token': localStorage.token || ''
+                    }
+                }).then(resp => {
+                    if (resp.status === 403) {
+                        alert('请先登录！')
+                        location.href = '/static/html/login_new.html'
+                    } else {
+                       return  resp.json()
+                    }
+                }).then(json => {
+                    console.log(json)
+                })
+            }
+        },
+        filters: {
+            maleOrFemale(sex) {
+                return sex ? '男' : '女'
+            }
+        }
+    })
+</script>
+```
+
+
+
+
+
+
+
+## 接口访问控制、认证
+
+Authentication - 认证
+
+Authorization - 授权
+
+
+
+AuthenticationFailed() 会抛出403 forbidden 禁止访问
+
+获取请求头的信息
+
+~~~python
+reuquest.META.get('HTTP_TOKEN')
+~~~
+
+
+
+ ### JWT用户认证
+
+获取jwt
+
+```python
+# 负载
+payload = {
+    'user_id': user.user_id,
+    # 时间可以相减，在现在的时间加上一天
+    'exp': timezone.now() + timedelta(days=1),
+}
+# 将token放回即可， 默认algorithm: str = "HS256",
+token = jwt.encode(payload, SECRET_KEY)
+```
+
+
+
+验证jwt
+
+前端使用的vue.js，展示部分，主要关注fetch函数的请求头要带入token
+
+<font color="red">前端参数请求头的**token**，传入后端会变为**HTTP_TOKEN**</font>
+
+```js
+methods: {
+    login() {
+        let data = {
+            'account': this.account,
+            'password': this.password,
+        }
+        fetch('/api/user/login/', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json'
+            },
+            // 将json对象处理为字符串
+            body: JSON.stringify(data)
+        }).then(resp => resp.json()).then(json => {
+            if (json.code === 1010) {
+                localStorage.token = json.token
+                localStorage.nickname = json.nickname
+                location.href = '/static/html/index.html'
+            } else {
+                this.message = json.message
+            }
+        })
+    },
+}
+```
+
+
+
+自定义jwt认证类，继承BaseAuthentication；jwt2.1**解码**时必要参数**algorithms**
+
+```python
+import jwt
+from jwt import InvalidTokenError
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.exceptions import AuthenticationFailed
+
+from common.models import User
+from ncc.settings import SECRET_KEY
+
+class LoginAuthentication(BaseAuthentication):
+
+    def authenticate(self, request):
+        token = request.META.get('HTTP_TOKEN', '')
+        content = {'code': 2001, 'message': '请先登录！'}
+        if token:
+            try:
+                # jwt2.1解码时必要参数algorithms
+                payload = jwt.decode(token, SECRET_KEY, algorithms='HS256')
+                user = User()
+                user.user_id = payload['user_id']
+                # 认证通过要求返回二元组（第一个元素是user对象，可以同故宫request.user获取到用户相关信息，第二个元素是token令牌，之后可能还需要用到）
+                return user, token
+            # 令牌伪造、过期，则会抛出InvalidTokenError，提示用户重新登录。
+            except InvalidTokenError:
+                raise AuthenticationFailed(content, code=2001)
+        raise AuthenticationFailed(content, code=2001)
+```
+
+
+
+在视图函数或类上
+
+~~~python
+from rest_framework.decorators import api_view, authentication_classes
+
+# FBV
+@api_view(('GET',) )
+@authentication_classes((LoginAuthentication,))
+def show(request):
+    pass
+	return JsonResponse({'data':[1,2,3]})
+
+# CBV
+class UserViewSet(ModelViewSet):
+    # 如何获取数据
+    queryset = User.objects.all()
+    # 如何序列化数据
+    serializer_class = UserModelSerializer
+    # 加认证属性
+    authentication_classes = (LoginAuthentication,)
+~~~
+
+
+
+
+
+## 异步任务和定时任务
+
+异步任务： 一个请求是比较耗时的操作，可以进行异步化处理；**把任务推迟执行**（如下订单，告知订单已接收，还未处理）
+
+异步化处理：请求不会因为耗时的操作而阻塞（让用户等待）。
+
+实现异步化：
+
+* 多线程，多进程
+* 消息队列：把任务先保存到消息队列中，对服务器有富余的处理能力时，再进行处理。
+
+异步任务相当于消息的生产者 - put - 消息队列 - get - 消息的消费者
+
+消息队列：
+
+* RabbitMQ / Kafka / ActiveMQ / RocketMQ / ZeroMQ
+  * Reids - list  - rpush / blpop ---> FIFO（先进先出）
+
+定时任务：任务不是人为触发，到了指定时间自动执行（有时间触发任务）。
+
+
+
+异步和定时任务可以用[Celery -- 分布式消息队列](https://www.celerycn.io/)，[celrey](http://docs.jinkan.org/docs/celery/)
+
+
+
+### 将异步任务和定时任务执行结果持久化
+
+~~~python
+pip install django-celery-results
+~~~
+
+加入settings.py应用中
+
+~~~python
+INSTALLED_APPS = [
+    'django_celery_results',
+]
+~~~
+
+默认有3张表来存放任务结果，所有需要执行**迁移**
+
+~~~python
+python manage.py migrate django_celery_results
+~~~
+
+
+
+### Django下配置定时任务和异步任务
+
+在django项目settings.py同级目录下新建celery.py
+
+~~~python
+import os
+
+import celery
+
+from ncc import settings
+
+"""
+配置方法1
+app = celery.Celery('ncc')
+
+从指定文件（如celery_config.py）中读取Celery配置信息
+app.config_from_object('celery_config')
+
+从Django项目的配置文件中读取Celery相关配置
+app.config_from_object('celery_config')
+
+配置方法2
+通过字典传入Celery对象的配置参数
+app.conf.update({...})
+
+"""
+
+# 注册环境变量（在Django项目中使用Celery需要注册Django配置文件）, Django项目下必须注册，否则无法启动
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ncc.settings')
+
+# 配置3
+app = celery.Celery(
+    # 模块名
+    main='ncc',
+    # 消息代理（消息代理服务器）
+    broker='redis://1.116.250.241:6379/5',
+
+    # 异步任务执行结果通过什么方式做持久化（在将来的某个时间获取任务执行的结果）
+    # 拿到任务的结果，持久化（存储异步或定时任务执行结果）
+    backend='redis://1.116.250.241:6379/6'
+    # 持久化到数据库
+    # backend='django-db',
+)
+
+# 自动从指定的应用中发现任务（异步任务/定时任务）
+app.autodiscover_tasks(('common', 'user'))
+"""
+自动从注册的应用中发现任务
+app.autodiscover_tasks(settings.INSTALLED_APPS)
+"""
+
+app.conf.update(
+    timezone=settings.TIME_ZONE,
+    eable_utc=True,
+    beat_schedule={
+        # 'work-at-midnight': {
+        #     'task': 'common.tasks.rest_user_counter',
+        #     # Linux可用Crontab -e 编辑克龙表达式
+        #     # * * * * * 分 时 日 月 周
+        #     # Celery中的Crontab构造器 ---> 分 时 周 日 月
+        #     # 全是* 代表每分钟都执行
+        #     # 参数需要字符串
+        #     'schedule': crontab(minute='0', hour='0')
+        # },
+        # 'work-at_friday': {
+        #     'task': '',
+        #     'schedule': crontab(hour='22', day_of_week='5')
+        # },
+        'work-every-second': {
+            'task': 'common.tasks.display_info',
+            'schedule': 1,  # 每分钟执行一次
+            'args': ('小费费', 5),
+        }
+    }
+)
+
+# 配置定时任务
+# 定时任务时消息的生产者，用beat命令激活定时任务
+# celery -A common beat -l debug 
+# 只有生产者没有消费者，消息会积压在消息队列中,加上--beat即使消费者，又是生产者
+# celery -A common worker -l debug -P eventlet --beat
+
+~~~
+
+简略版
+
+```python
+"""
+@Time ： 2021/6/23 9:54
+@Auth ： Melon
+@File ：celery.py
+@Description : 处理定时任务和异步任务
+"""
+# 使celery.py模块不会与库冲突
+from __future__ import absolute_import
+
+import os
+
+from celery import Celery
+from celery.schedules import crontab
+
+from ncc import settings
+
+# 为celery命令行程序设置默认的环境变量
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ncc.settings')
+
+app = Celery(
+    main='ncc',
+    broker='redis://1.116.250.241:6379/5',
+    # backend='redis://1.116.250.241:6379/6',
+    backend='django-db',
+
+    include=['common.tasks'],
+)
+
+app.autodiscover_tasks(('common', 'user'))
+
+app.conf.update(
+    timezone=settings.TIME_ZONE,
+    eable_utc=True,
+    beat_schedule={
+        'work-every-second': {
+            'task': 'common.tasks.display_info',
+            'schedule': crontab(),  # 每分钟执行一次
+            'args': ('小费费', 2),
+        },
+
+    }
+)
+```
+
+开启任务调度 
+
+~~~shell
+celery -A proj beat --loglevel=info 
+~~~
+
+
+
+启动职程（worker - 消费者）
+
+~~~shell
+celery -A proj worker --loglevel=info --pool=solo
+~~~
+
+
+
+delay()，相当于apply_async()的简化直接传参即可
+
+~~~shell
+add.delay(2, 2)
+~~~
+
+
+
+`apply_async()` 可以指定调用时执行的参数，例如运行的时间，使用的任务队列
+
+~~~shell
+ add.apply_async((2, 2), queue='lopri', countdown=10)
+~~~
+
+
+
+
+
+
+
+## WEB应用性能两大定律：
+
+第一定律 ： 缓存 - 空间换时间，减少数据库压力
+
+第二定律 ：能推迟的事情不要马上执行 -  异步化 - 消息队列、多线程
+
+
+
+## 编程原则
+
+DRY原则  - Don't Repeat Yourself  - 不要重复造轮子
+
+KISS原则 - Keep It Simple & Stupid - 不成熟的优化是万恶之源
+
+YAGNI - You Ain't Gonna Nedd It - 浅尝辄止
