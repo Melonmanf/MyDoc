@@ -1435,3 +1435,210 @@ DRY原则  - Don't Repeat Yourself  - 不要重复造轮子
 KISS原则 - Keep It Simple & Stupid - 不成熟的优化是万恶之源
 
 YAGNI - You Ain't Gonna Nedd It - 浅尝辄止
+
+
+
+
+
+# 项目部署
+
+
+
+## 动静分离部署
+
+静态资源： Nginx
+
+动态资源：(Python)
+
+* 同步： uWSGI、Gunicorn
+* 异步： Uvicorn、Daphane
+
+
+
+## 克隆最新的版本
+
+~~~sh
+git clone --depth=1 git@.....com:xxx/xxx.git
+~~~
+
+
+
+## virtualenv
+
+安装
+
+~~~sh
+pip3 install virtualenv
+~~~
+
+
+
+创建虚拟环境
+
+~~~sh
+virtualenv --python=/usr/bin/python3 venv
+~~~
+
+
+
+启动venv，在项目下
+
+~~~sh
+. venv/bin/activate
+~~~
+
+
+
+关闭虚拟环境
+
+~~~sh
+deactivate
+~~~
+
+
+
+安装依赖项
+
+~~~sh
+pip install -r  requirements.txt
+~~~
+
+
+
+## 解决跨域问题
+
+解决同源访问策略
+
+安装
+
+~~~sh
+pip install  django-cors-headers
+~~~
+
+
+
+INSTALLED_APPS中添加
+
+```python
+INSTALLED_APPS = [
+   
+    'django.contrib.staticfiles',
+    # 'debug_toolbar',
+    'corsheaders',
+    'rest_framework',
+
+
+]
+```
+
+
+
+中间件在第一个添加corsheaders.middleware.CorsMiddleware
+
+```python
+MIDDLEWARE = [
+    # 'debug_toolbar.middleware.DebugToolbarMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+]
+```
+
+
+
+添加配置
+
+```python
+# 配置允许跨域访问接口数据
+CORS_ORIGIN_ALLOW_ALL = True
+
+# 跨域访问允许的请求头
+CORS_ALLOW_HEADERS = (
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'token',
+)
+
+# 跨域访问支持的HTTP请求方法
+CORS_ALLOW_METHODS = (
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+)
+
+# 忽略请求是否由`/`借宿，找不到网址
+APPEND_SLASH = False
+```
+
+
+
+指定那些网站可以跨域请求数据
+
+```python
+CORS_ALLOW_HOST =[
+	'www.baidu.com'
+]
+```
+
+
+
+## 解决令牌问题
+
+pyjwt	->	itsdangerous
+
+
+
+
+
+## 配置uwsgi
+
+~~~ini
+[uwsgi]
+# 前导路径
+base=/root/project/back_end/pj_nc
+# 项目项目名称
+name = nc
+# 守护进程
+master=true
+# 进程个数
+processes=2
+# 虚拟环境
+pythonhome=%(base)/%(name)/venv
+# 项目地址
+chdir=%(base)/%(name)
+# 指定pythoon解释器
+pythonpath=%(pythonhome)/bin/python 
+# 指定uwsgi文件
+module=%(name).wsgi
+# socket=1.116.250.241:8000
+http=0.0.0.0:8000
+# 日志文件地址
+logto=%(base)/logs/uwsgi.log
+~~~
+
+
+
+后台运行
+
+~~~sh
+uwsgi --ini  conf/uwsgi.ini  &
+~~~
+
+
+
+后台运行 ctrl + z
+
+~~~sh
+j
+~~~
+
+
+

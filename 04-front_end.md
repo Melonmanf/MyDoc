@@ -916,6 +916,7 @@ app.component('todo-list-statistics', {
 
 * 可转为父子组件的通信方式
 * event-bus 事件总线：
+* vuex - 状态管理
 
 创建一个空的Vue实例
 
@@ -1065,7 +1066,7 @@ Axios 是一个基于 promise 的 HTTP 库，可以用在浏览器和 node.js �
 
 
 
-### 基本配置
+## 基本配置
 
 安装
 
@@ -1076,6 +1077,576 @@ npm install vue-router
 
 
 
+
+
+
+### 命名视图
+
+routes.js
+
+```js
+const routes = [{
+    path: '/', // 路由路径
+    components: {
+        header: CommonNavBar,
+        default: Home,
+        footer: TabBar,
+    }, // 路径组件
+    meta: {
+        isTabBar: true,
+        title: '首页',
+        icon: '&#xe60b;'
+    }
+},]
+```
+
+
+
+APP.vue
+
+```HTML
+<template>
+  <div id="app">
+    <header> <router-view name="header"></router-view></header>
+    <main>
+      <router-view id="main"/>
+    </main>
+    <footer>
+      <router-view name="footer"></router-view>
+    </footer>
+  </div>
+</template>
+```
+
+
+
+### 路由元信息
+
+routes.js
+
+```js
+const routes = [{
+    path: '/', // 路由路径
+    components: {
+        header: CommonNavBar,
+        default: Home,
+        footer: TabBar,
+    }, // 路径组件
+    meta: {
+        isTabBar: true,
+        title: '首页',
+        icon: '&#xe60b;'
+    }
+},]
+```
+
+
+
+组件实例上或App.vue上
+
+```js
+  watch: {
+    $route(newRoute) {
+      this.title = newRoute.meta.title
+    }
+  }
+
+```
+
+
+
+### axios二次封装
+
+request.js
+
+```js
+// axios 二次封装
+import axios from 'axios'
+
+// 判断开发环境和生产环境
+const baseURL = process.env.NODE_ENV === 'development'
+    ? 'http://www.xiongmaoyouxuan.com'
+    : 'http://www.xiongmaoyouxuan.com'
+
+// 创建axios实例
+const request = axios.create({
+    baseURL: baseURL,
+    timeout: 10000,
+
+})
+
+
+// 请求拦截：用户权限认证时token拦截
+request.interceptors.request.use(config => config)
+
+
+// 响应拦截
+request.interceptors.response.use(response => {
+    if(response.status === 200 ){
+        if(response.data.code === 1000 ){
+            return response.data.data
+        }
+    }
+    return  Promise.reject(response)
+})
+
+
+
+export default request
+```
+
+
+
+### 嵌套路由
+
+routes.js
+
+~~~js
+const routes = [
+    {
+        path: '/category',
+        components: {
+            header: SearchNav,
+            default: Category,
+            footer: TabBar
+
+        },
+        children:[
+            {
+                path:'subcategory/:cid',
+                component:SubCategory,
+                meta:{
+
+                }
+
+            }
+        ],
+        meta:{
+            isTabBar: true,
+            title: '分类',
+            icon: '&#xe60f;'
+        }
+    },
+]
+~~~
+
+在组件中获取所传递的动态路径参数$route
+
+
+
+请求
+
+```js
+/**
+ * 根据父级分类的id,查询子数据
+ * @param cid
+ * @returns {{method: string, url: string}}
+ */
+export const getSubCategorise = cid => {
+    return request({
+        method: 'GET',
+        url: `/api/tab/${cid}`
+
+    })
+}
+```
+
+
+
+父组件
+
+```html
+<template>
+    <div class="category">
+    <ul class="category-side">
+      <li
+          is="router-link"
+          v-for="category in categories"
+          :key="category.id"
+          tag="li"
+          :to="'/category/subcategory/'+category.id"
+      >{{category.name}}</li>
+    </ul>
+    <div class="category-sub">
+      <router-view></router-view>
+    </div>
+    </div>
+</template>
+```
+
+
+
+子组件
+
+方法一：
+
+```js
+<script>
+import {getSubCategorise} from '@/api/category'
+
+export default {
+  name: "SubCategory",
+  data() {
+    return {
+      cid: 0
+    }
+  },
+  created() { 
+    this.cid = this.$route.params.cid
+  },
+  methods: {
+    // 获取数据
+    getSubCategoryData() {
+      getSubCategorise(this.cid).then(res => console.log('子数据：', res))
+    }
+  },
+  watch: {  // 侦听属性
+    // 监听路径变化
+    $route(newRoute) {
+      console.log(newRoute.params.cid) // 获取路径动态参数
+      this.cid = newRoute.params.cid
+      this.getSubCategoryData()
+    }
+  }
+}
+</script>
+```
+
+方法二： 用对象的方式监听加入属性immediate: true 该回调将会在侦听开始之后被立即调用
+
+```js
+export default {
+  name: "SubCategory",
+  data() {
+    return {
+      cid: 0
+    }
+  },
+  methods: {
+    async getSubCategoryData() {
+      try{
+        // 异步获取数据
+        const  res = await getSubCategorise(this.cid)
+        console.log('子数据：',res )
+      }catch (e) {
+        console.log(e)
+      }
+    }
+  },
+  watch: {
+
+    $route: {
+      handler(newRoute) {
+          console.log(newRoute.params.cid)
+          this.cid = newRoute.params.cid
+          this.getSubCategoryData()
+      },
+      immediate: true
+    }
+  }
+}
+</script>
+```
+
+
+
+### 编程式导航
+
+跳转页面：this.$router.push
+
+push()  	-	跳转
+
+back() 	- 	后退一步
+
+go()	- 	后退多步
+
+
+
+URL中传递参数的方式：
+
+* 动态路径传参：定义路径后面添加/:id格式的参数，在\$route对象中，使用\$route.params获取参数
+* 查询字符串传参：通过\$route.query获取参数
+
+```js
+$route: {
+  handler(newRoute) {
+    // 动态路径
+    this.cid = newRoute.params.cid
+   	// 查询方式
+    this.cid = newRoute.query.cid
+  },
+```
+
+
+
+### 命令路由
+
+
+
+```js
+const routes = [
+  {
+    path: '/user/:username',
+    name: 'user',
+    component: User
+  }
+]
+```
+
+
+
+```js
+<router-link :to="{ name: 'user', params: { username: 'erina' }}">
+  User
+</router-link>
+```
+
+
+
+
+
+```js
+router.push({
+    name: 'user',
+    // 动态路径
+    params: {
+        username: 'erina'
+    },
+    // 查询方式
+    query:{
+        username: 'erina'
+    }
+})
+```
+
+
+
+path和params不能一起用，会自动忽略params属性值
+
+~~~js
+router.push('/list/?id=0')
+router.push('/list/0')
+router.push({name: 'list', params: {id: 1}})
+router.push({name: 'list', query: {id: 1}})
+router.push({path: '/list', query: {id: 1}})
+~~~
+
+
+
+### 过滤器
+
+用于格式化数据，用在{{}}或v-bind属性中
+
+全局定义
+
+~~~js
+Vue.filter('money', val => {
+  return Number(val).toFixed(2)
+})
+~~~
+
+
+
+局部定义，在组价中定义filters
+
+~~~js
+{
+    filters:{
+        foo:function(val){
+            return newval
+        }
+    }
+}
+~~~
+
+
+
+使用
+
+~~~html
+<div :title="product.price | money"> {{ product.price | money}} </div>
+
+~~~
+
+
+
+### localStorage	sessionStorage	cookie
+
+cookie携带在请求头里面，因此会占用网络带宽。
+
+使用数组的数据结构来保存用户选购的商品信息，可以将数组中的数据保存在本地的存储结构中（cookie、sessionStorage、localStorage）
+
+在保存购物车中商品数据信息时，通常有两种保存方式：一是将选购商品的详情数据都保存下来，二是只保存选购商品的id和数量，在查看购物车是在动态查询商品信息。
+
+实际购物车添加、修改的操作会前后端同步（在前端页面上修改了购物车的商品数据，后端也会同步到服务器上）
+
+购物车通用功能：
+
+1. 加入购物车
+2. 修改商品数量
+3. 删除购物车中的商品
+4. 计算商品小计、合计价格
+5. 全选、部分选中
+6. 清空购物车
+
+## Vuex
+
+全局共享资源可用Vuex管理：购物车、用户登录状态、语言、全局主题、换肤。n
+
+store：每一个Vuex应用的核心是store(仓库)
+
+state：状态，各数组中需要共享资源数据
+
+getter：相当于是store中的计算属性
+
+mutation：（方法）作用是用于更新state，更改Vuex的store中的状态的唯一方法是提交mutation；
+
+action：（方法）可以使用异步方式更新state（并不能直接更新saate，而需要通过提交mutation来更新）
+
+mudule：模块，每个模块中都有自己的state、getter、mutatio、action，基于有自己的module。
+
+### 使用
+
+安装vuex
+
+~~~sh
+npm i vuex -s
+~~~
+
+
+
+创建实例
+
+```js
+import Vue from 'vue'
+import Vuex from 'vuex'
+
+Vue.use(Vuex)
+
+
+const store = new Vuex.Store({
+    state: {
+        cart: []
+    }, // 用于保存状态数据
+    getters: {}, // 相当于store中的计算属性
+    mutations: {
+        /**
+         * 加入购物车
+         * @param state 保存状态数据的state对象
+         * @param payload 有效载荷：需要添加到购物车数组中的商品对象
+         */
+        addToCart(state, payload) {
+            const cart = [...state.cart]
+            const hasExist = cart.some(prod => prod.id === payload.id)
+            if (hasExist) {
+                state.cart = cart.map(pord => {
+                    // return pord.id === payload.id ? pord.amount += payload.amount : pord
+                    if(pord.id === payload.id){
+                        pord.amount += payload.amount
+                    }
+                    return pord
+                })
+            } else {
+                state.cart = [
+                    ...cart,
+                    payload
+                ]
+            }
+        }
+    }, // 同步更新state时使用的方法
+    actions: {}, // 通常异步更新state时的方法
+    modules: {}, // 模块
+})
+
+
+export default store
+```
+
+
+
+挂载
+
+~~~js
+import Vue from 'vue'
+import App from './App.vue'
+import router from './router'
+import '@/assets/css/common.css'
+import store from '@/store'
+
+Vue.config.productionTip = false
+
+// 定义全局过滤器，格式化商品金额
+Vue.filter('money', val => {
+    return Number(val).toFixed(2)
+})
+new Vue({
+    render: h => h(App),
+    router,
+    store
+}).$mount('#app');
+
+~~~
+
+
+
+在组件中提交mutation实现状态更新
+
+~~~js
+methods:{
+    addToCartHandler(id, title, image, price) {
+      const currentProduct = {
+        id,
+        title,
+        image,
+        price,
+        amount: 1,
+      }
+      // 提交mutation方法，实现添加购物车动作
+      this.$store.commit('addToCart', currentProduct)
+      console.log(this.$store)
+    }
+}
+~~~
+
+
+
+## 导航守卫
+
+主要用来通过跳转或取消的方式守卫导航
+
+
+
+全局到导航守卫
+
+router.beforeEach(to, from, next) 
+
+
+
+## UI组件库
+
+移动端：[vant](https://youzan.github.io/vant/#/zh-CN/sku)、[mint-ui](https://mint-ui.github.io/#!/zh-cn)
+
+cp端：[element-ui](https://element-plus.gitee.io/#/zh-CN/component/layout)、[ivew](https://iview.github.io/docs/guide/install)
+
+
+
+## Vue error
+
+### IView less 报错
+
+less版本问题
+
+~~~sh
+npm install  less-loader@4.1.0  less@2.7.0
+~~~
+
+
+
+### 关于Element UI 自定义主题错误解决
+
+无需nodejs版本降级
+
+[解决方案](https://blog.csdn.net/sinat_36728518/article/details/113310494)
 
 # nodejs
 
