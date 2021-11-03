@@ -145,7 +145,7 @@ TEMPLATES = [
 返回参数request、模板页的名字、字典（页面需要的数据）
 
 ```python
-return render(request, 'index.html', {})
+    return render(request, 'index.html', {})
 ```
 
 
