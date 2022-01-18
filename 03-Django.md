@@ -1,3 +1,29 @@
+![image-20211127201357012](C:\Users\ReddyFan\AppData\Roaming\Typora\typora-user-images\image-20211127201357012.png)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # 			Django
 
 Web应用：在浏览器中可以直接使用的应用程序
@@ -393,7 +419,142 @@ JsonResponse(data)
 
 [jet中文文档](https://www.cnblogs.com/luofeel/p/8670030.html)
 
+## Django xadmin
 
+### xadmim安装
+django2.2.4
+在使用默认admin，创建用户之后
+~~~shell
+pip install https://codeload.github.com/sshwsfc/xadmin/zip/django2
+~~~
+
+settings.py中添加
+~~~python
+INSTALLED_APPS = [
+    'xadmin',
+    'crispy_forms',
+]
+~~~
+
+一级urls.py中添加
+~~~python
+import xadmin
+from django.contrib import admin
+from django.urls import path
+
+urlpatterns = [
+    path('admin/', xadmin.site.urls),
+]
+~~~
+
+#### 报错
+错误：ImportError: cannot import name DEFAULT_FORMATS 
+原因：版本原因，旧版本中有`SKIP_ADMIN_LOG`、`TMP_STORAGE_CLASS`，新版本中放在了类中了。`DEFAULT_FORMATS`位置发生变化。
+~~~python
+from import_export.formats.base_formats import DEFAULT_FORMATS 
+from import_export.admin import  ImportMixin, ImportExportMixinBase
+
+class ImportBaseView(ModelAdminView):
+        def get_skip_admin_log(self):
+            if self.skip_admin_log is None:
+                # return SKIP_ADMIN_LOG
+                return ImportMixin(ImportExportMixinBase).get_skip_admin_log()
+            else:
+                return self.skip_admin_log
+    
+        def get_tmp_storage_class(self):
+            if self.tmp_storage_class is None:
+                # return TMP_STORAGE_CLASS
+                return ImportMixin(ImportExportMixinBase).get_tmp_storage_class()
+            else:
+                return self.tmp_storage_class
+~~~
+
+### 后台配置
+在app下的admin.py
+~~~python
+class BaseSetting(object):
+    enable_themes = True
+    use_bootswatch = True
+
+
+xadmin.site.register(views.BaseAdminView, BaseSetting)
+
+class GlobalSettings:
+    site_title = '后台管理系统'
+    site_footer = '后台管理系统'
+    menu_style = 'accordion' # 菜单折叠
+
+xadmin.site.register(views.CommAdminView, GlobalSettings)
+
+class PostInline(admin.TabularInline):
+    fields = ('title', 'desc')
+    extra = 0
+    model = Post
+~~~
+
+### 默认用当前用户操作后台
+对后台的操作，应默认的记录操作人员。
+方法：在admin.py下，创建基类，之后要用到模型基础即可。
+~~~python
+class BaseOwnerAdmin:
+    #admin配置
+    # exclude = ('owner',)
+
+    # def save_model(self, request, obj, form, change):
+    #     obj.owner = request.user
+    #     print(obj.owner)
+    #     return super(BaseOwnerAdmin, self).save_model(request, obj, form, change)
+
+    #xadmin配置
+    def save_models(self):
+        obj = self.new_obj
+        obj.owner = self.request.user
+        return super().save_models()
+~~~
+
+
+### 获取当前用户的数据信息
+~~~python
+def queryset(self):
+        qs = super(taskAdmin, self).queryset()
+        if self.request.user.is_superuser:  # 超级用户可查看所有数据
+            return qs
+        else:
+            return qs.filter(task_username=self.request.user)  # task_username是Task Model的用户字段
+        super().queryset(self)
+~~~
+
+
+
+
+
+### admin配置
+
+### 自定义app名称
+应用apps.py下，加入verbose_name
+~~~python
+from django.apps import AppConfig
+
+
+class BlogConfig(AppConfig):
+    name = 'blog'
+    verbose_name = '博客'
+~~~
+
+在当前应用下\_\_init\_\_.py下，增减如下代码
+~~~python
+default_app_config = 'blog.apps.BlogConfig'
+~~~
+
+
+### admin配置日志记录
+~~~python
+@admin.register(LogEntry)
+class LogEntryModelAdmin(admin.ModelAdmin):
+    list_display = ['object_repr', 'object_id',
+                    'action_flag', 'user', 'change_message']
+~~~
 
 ### 安装错误
 
@@ -1636,9 +1797,102 @@ uwsgi --ini  conf/uwsgi.ini  &
 
 后台运行 ctrl + z
 
+
+
+# 企业级开发配置
+
+## 拆分settings配置文件
+
+拆分settings.py以满足不同环境的需求，在一个文件里编写3个环境的配置维护十分困难。
+
+在settings.py文件目录下，创建settings python文件夹，
+
+创建base.py、develop.py、product.py来应对不同的开发环境。
+
+将settings.py中的文件移到base.py中，
+
+develop.py	-	开发环境
+
+product.py	-	生成环境
+
+同时修改manage.py、asgi.py、wsgi.py中的配置
+
+~~~python
+ # os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blog.settings')
+    profile = os.environ.get('TYPEIDEA_PROFILE', 'develop')
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'blog.settings.%s' % profile)
+~~~
+
+## 版本协助 git
+
+### 配置git命令别名
+
 ~~~sh
-j
+vim ~/.gitconfig
+
+# 添加别名
+[alias]
+        st = status
+        br = branch
+        co = checkout
+        ci = commit
+        lg = log
 ~~~
 
 
+
+
+
+## 管理后台
+
+## 注册模型
+
+由超级管理员的前提下，将模型交给admin管理。
+
+#### 注册模型配置1
+
+~~~python
+@admin.register(Link) # 为当前模型 Link 注册后台管理
+class LinkModelAdmin(admin.ModelAdmin):
+    # 后台展示的数据
+    list_display = ('title', 'href', 'status', 'weight', 'owner')
+    # 需要进行处理的字段
+    fields = ('title', 'href', 'status', 'weight')
+    
+    # 将操作当前数据的后台管理员作为操作对象
+     def save_model(self, request, obj, form, change):
+        obj.owner = request.user
+        return super(LinkModelAdmin, self).save_model(request, obj, form, change)
+
+~~~
+
+
+
+#### 注册模型配置2
+
+循环遍历所有模型类注册对应的模型管理类
+
+```python
+# 获取当前模块对应的对象
+curr_module = sys.modules[__name__]
+# 通过Python反射机制获取models模块中所有的类
+cls_members = inspect.getmembers(models, inspect.isclass)
+# 循环遍历所有模型类注册对应的模型管理类
+for cls_name, cls in cls_members:
+    # 根据模型的名字动态获取模型管理类
+    if cls_name != 'BaseModel':
+        model_admin_cls = getattr(curr_module, f'{cls_name}ModelAdmin')
+        if model_admin_cls:
+            admin.site.register(cls, model_admin_cls)
+        else:
+            admin.site.register(cls)
+```
+
+
+
+
+
+
+
+<font color="gray">注：本文纯用于个人学习笔记。</font>
 
