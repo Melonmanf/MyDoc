@@ -2,28 +2,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # 			Django
 
 Web应用：在浏览器中可以直接使用的应用程序
@@ -1603,7 +1581,7 @@ YAGNI - You Ain't Gonna Nedd It - 浅尝辄止
 
 # 项目部署
 
-
+pip install django-celery-results
 
 ## 动静分离部署
 

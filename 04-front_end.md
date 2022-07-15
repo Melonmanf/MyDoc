@@ -388,7 +388,7 @@ Vue.createApp({
 }).mount('#computed-basics')
 ```
 
-
+![image-20220428113613715](/Users/reddyfan/Library/Application Support/typora-user-images/image-20220428113613715.png)
 
 <font color="#0099ff">计算属性和方法的区别：</font>
 
@@ -1491,7 +1491,7 @@ cookie携带在请求头里面，因此会占用网络带宽。
 
 ## Vuex
 
-全局共享资源可用Vuex管理：购物车、用户登录状态、语言、全局主题、换肤。n
+全局共享资源可用Vuex管理：购物车、用户登录状态、语言、全局主题、换肤。
 
 store：每一个Vuex应用的核心是store(仓库)
 
@@ -1499,7 +1499,7 @@ state：状态，各数组中需要共享资源数据
 
 getter：相当于是store中的计算属性
 
-mutation：（方法）作用是用于更新state，更改Vuex的store中的状态的唯一方法是提交mutation；
+mutation：（方法）作用是用于更新state，更改Vuex的store中的状态的唯一方法是提交mutation；(同步执行的)
 
 action：（方法）可以使用异步方式更新state（并不能直接更新saate，而需要通过提交mutation来更新）
 
@@ -1620,7 +1620,7 @@ methods:{
 
 router.beforeEach(to, from, next) 
 
-
+![image-20220428112537633](/Users/reddyfan/Library/Application Support/typora-user-images/image-20220428112537633.png)
 
 ## UI组件库
 
